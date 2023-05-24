@@ -7,6 +7,10 @@ set.seed(123)
 train_data <- read.csv("train_ch.csv")
 test_data <- read.csv("test_ch.csv")
 
+# head(train_data)      # View the first few rows of the data
+# summary(train_data)   # Get summary statistics for each variable
+# str(train_data)       # View the structure of the data frame
+
 # Check for missing values in the training data
 # sum(is.na(train_data))
 
@@ -59,13 +63,17 @@ lm_model <- train(Y ~ v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9,
 
 lm_predictions <- predict(lm_model, newdata = test_data)
 
+# summary(lm_model)
+
 lm_model_v3 <- train(Y ~ v3,
                       data = train_data,
                       method = "lm",
                       trControl = trainControl(method = "cv"))
 
 lm_predictions_v3 <- predict(lm_model_v3, newdata = test_data)
+# lm_predictions_v3_train <- predict(lm_model_v3, newdata = train_data)
 
+# summary(lm_model_v3)
 
 # Nonparametric approach
 knn_model <- train(Y ~ v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9,
@@ -84,12 +92,14 @@ knn_model_v3 <- train(Y ~ v3,
                    tuneGrid = expand.grid(k = 1:10))
 
 knn_predictions_v3 <- predict(knn_model_v3, newdata = test_data)
+# knn_predictions_v3_train <- predict(knn_model_v3, newdata = train_data)
 
 
 predictions <- data.frame(pred_knn = knn_predictions_v3, pred_lm = lm_predictions_v3)
-                          #pred_knn_v3 = knn_predictions_v3, pred_lm_v3 = lm_predictions_v3)
 
 write.csv(predictions, file = "predictions.csv", row.names = FALSE)
 
 print(knn_model_v3$results)
 print(lm_model_v3$results)
+
+
