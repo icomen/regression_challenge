@@ -8,6 +8,7 @@ library(factoextra)
 library(visreg)
 library(FNN)
 library(e1071)
+library(mgcv)
 
 
 set.seed(123)
@@ -25,12 +26,14 @@ test_data <- read.csv("test_ch.csv")
 
 vars <- c("v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "Y")
 vars_of_interest <- c("v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9")
-vars_no_corr <- c("v1", "v2", "v3", "v4", "v6", "v8", "v9")
+vars_no_coll <- c("v1", "v2", "v3", "v4", "v6", "v8", "v9")
+
+subset_train <- train_data[, c("v1", "v2", "v3", "v4", "v6", "v8", "v9", "Y")]
 
 ## Step 2: Plot Predictors and Check Collinearity
 
 # Scatter plots of variables against the response variable using ggplot2
-for (var in vars_of_interest) {
+for (var in vars_no_coll) {
   plot_title <- paste(var, "vs. Y")
   p <- ggplot(train_data, aes(x = get(var), y = Y)) +
     geom_point() +
@@ -39,10 +42,10 @@ for (var in vars_of_interest) {
 }
 
 # Create a pair plot using the 'pairs()' function
-pairs(train_data[, vars])
+pairs(train_data[, vars_no_coll])
 
 # Correlation matrix
-cor_matrix <- cor(train_data[, vars_of_interest])
+cor_matrix <- cor(train_data[, vars_no_coll])
 # print(cor_matrix)
 
 # Plot the correlation matrix using corrplot
@@ -56,18 +59,18 @@ heatmap(cor_matrix,
         ylab = "Variables")
 
 # Loop through each variable and create distribution plots
-for (var in vars) {
+for (var in vars_no_coll) {
   # Create a histogram using the 'hist()' function
   hist(train_data[[var]], main = paste("Histogram of", var), xlab = var)
 
   # Alternatively, create a density plot using 'geom_density()' in ggplot2
-  ggplot(train_data, aes(x = get(var))) +
-    geom_density(fill = "lightblue", alpha = 0.6) +
-    labs(title = paste("Density Plot of", var), x = var, y = "Density")
+  # ggplot(train_data, aes(x = get(var))) +
+  #   geom_density(fill = "lightblue", alpha = 0.6) +
+  #   labs(title = paste("Density Plot of", var), x = var, y = "Density")
 }
 
 # Perform Principal Component Analysis (PCA)
-pca_result <- PCA(train_data[, vars_of_interest], graph = FALSE)
+pca_result <- PCA(train_data[, vars_no_coll], graph = FALSE)
 
 # Create a correlation circle plot
 corr_circle <- fviz_pca_var(pca_result, axes = c(1, 2), col.var = "black")
@@ -77,33 +80,60 @@ print(corr_circle)
 
 ## Step 3: Parametric Linear Regression Model
 
-lm_model <- lm(Y ~ v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9, data = train_data)
+lm_model <- lm(Y ~ v1 + v2 + v3 + v4 + v6 + v8 + v9, data = subset_train)
 
-# lm_model <- train(Y ~ v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9,
-#                   data = train_data,
-#                   method = "lm",
-#                   trControl = trainControl(method = "cv"))
+# Create an empty list to store the regression models
+regression_models <- list()
+
+# Iterate over each predictor and fit a linear regression model
+for (predictor in vars_of_interest) {
+  formula <- as.formula(paste("Y ~", predictor))
+
+  # Fit the linear regression model
+  lm_model_v <- lm(formula, data = train_data)
+
+  # Store the model in the list
+  regression_models[[predictor]] <- lm_model_v
+}
+
+lm_model_v1 <- regression_models[["v1"]]
+lm_model_v2 <- regression_models[["v2"]]
+lm_model_v3 <- regression_models[["v3"]]
+lm_model_v4 <- regression_models[["v4"]]
+lm_model_v5 <- regression_models[["v5"]]
+lm_model_v6 <- regression_models[["v6"]]
+lm_model_v7 <- regression_models[["v7"]]
+lm_model_v8 <- regression_models[["v8"]]
+lm_model_v9 <- regression_models[["v9"]]
 
 # View the summary of the linear regression model
 summary(lm_model)
+# summary(lm_model_v1)
+# summary(lm_model_v2)
+# summary(lm_model_v3)
+# summary(lm_model_v4)
+# summary(lm_model_v5)
+# summary(lm_model_v6)
+# summary(lm_model_v7)
+# summary(lm_model_v8)
+# summary(lm_model_v9)
 
 # Calculate the Variance Inflation Factor (VIF)
 vif_values <- vif(lm_model)
 print(vif_values)
 
-lm_predictions <- predict(lm_model, newdata = test_data)
 
 ## Step 4: Check for Nonlinearity in Predictors
 
-# We can assess nonlinearity using the scatterplot of the predictor against the response variable and density plots
+# We can assess nonlinearity using the scatterplot of the predictor against the response variable and histogram plots
 
-for (var in vars_of_interest) {
+for (var in vars_no_coll) {
    # Plot the relationship between the predictor and the response variable
   visreg(lm_model, var, scale = "response", line = list(col = "blue"), partial = FALSE,
          xlab = var, ylab = "Response")
 }
 
-## Step 5: Check Violation of Assumptions and Synergic Effects (if applicable)
+## Step 5: Check Violation of Assumptions and Synergic Effects
 
 # Check linearity assumption
 # Residual plot
@@ -132,48 +162,98 @@ plot(cooksd, pch = "*", cex = 1.5, main = "Influential Observations by Cook's di
 influential <- as.numeric(names(cooksd)[cooksd > 4 / length(cooksd)])
 print(influential)
 
-# lm_model_v3 <- train(Y ~ v3,
-#                       data = train_data,
-#                       method = "lm",
-#                       trControl = trainControl(method = "cv"))
-#
-# lm_predictions_v3 <- predict(lm_model_v3, newdata = test_data)
+# Solve violations of assumptions:
 
-# # Tune and select the optimal value of k (number of neighbors)
-# k <- tune.knn(train = train_data[, -response_column_index], test = test_data, cl = train_data$response, k = 1:10)$best.neighbors
-#
-# # Fit KNN model with the selected k value
-# knn_model <- knn(train = train_data[, -response_column_index], test = test_data, cl = train_data$response, k = k)
-#
-# # View the predictions from the KNN model
-# knn_model
+# Logarithmic transformation
+model_log <- lm(Y ~ log(v1 + v2 + v3 + v4 + v6 + v8 + v9), data = subset_train)
+
+# Square root transformation
+model_sqrt <- lm(Y ~ sqrt(v1 + v2 + v3 + v4 + v6 + v8 + v9), data = subset_train)
+
+# Polynomial transformation
+model_poly <- lm(Y ~ I(v1^4) + I(v2^4) + I(v3^2)+ v4 + v6 + v8 + I(v9^4) , data = subset_train)
+
+# Compare model fits
+anova(lm_model, model_log, model_sqrt, model_poly)
+
+# Fit a GAM
+model_gam <- gam(Y ~ s(v1) + s(v2) + v3 + s(v4) + s(v6) + s(v8) + s(v9), data = subset_train)
+
+# Compare model fits
+AIC(lm_model,model_log, model_sqrt, model_poly, model_gam)
+
+# Results:
+plot(model_poly, which = 1)
+plot(model_poly, which = 2)
+plot(model_poly, which = 3)
+plot(model_poly, which = 5)
+avPlots(model_poly)
+cooksd <- cooks.distance(model_poly)
+plot(cooksd, pch = "*", cex = 1.5, main = "Influential Observations by Cook's distance")
+influential <- as.numeric(names(cooksd)[cooksd > 4 / length(cooksd)])
+# print(influential)
 
 
+model_lm0 <- train(Y ~ v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9,
+                    data = train_data,
+                    method = "lm",
+                    trControl = trainControl(method = "cv"))
 
-# Nonparametric approach
-knn_model <- train(Y ~ v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9,
+model_lm0$results
+
+model_lm <- train(Y ~ v1 + v2 + v3 + v4 + v6 + v8 + v9,
+                    data = subset_train,
+                    method = "lm",
+                    trControl = trainControl(method = "cv"))
+
+model_lm$results
+
+
+poly_model <- train(Y ~ I(v1^4) + I(v2^4) + I(v3^2)+ v4 + v6 + v8 + I(v9^4),
+                    data = subset_train,
+                    method = "lm",
+                    trControl = trainControl(method = "cv"))
+
+poly_model$results
+
+knn_model0 <- train(Y ~ v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9,
                    data = train_data,
                    method = "knn",
                    trControl = trainControl(method = "cv"),
-                   tuneGrid = expand.grid(k = 1:10))
+                   tuneGrid = expand.grid(k = 1:30))
 
 
+knn_model0$results
+
+knn_model1 <- train(Y ~ v1 + v2 + v3 + v4 + v6 + v8 + v9,
+                   data = subset_train,
+                   method = "knn",
+                   trControl = trainControl(method = "cv"),
+                   tuneGrid = expand.grid(k = 1:30))
+
+
+knn_model1$results
+
+knn_model <- train(Y ~ I(v1^4) + I(v2^4) + I(v3^2) + v4 + v6 + v8 + I(v9^4),
+                   data = subset_train,
+                   method = "knn",
+                   trControl = trainControl(method = "cv"),
+                   tuneGrid = expand.grid(k = 1:30))
+
+
+knn_model$results
+
+
+
+
+lm_predictions <- predict(model_lm, newdata = test_data)
+poly_predictions <- predict(poly_model, newdata = test_data)
 knn_predictions <- predict(knn_model, newdata = test_data)
 
-# knn_model_v3 <- train(Y ~ v3,
-#                    data = train_data,
-#                    method = "knn",
-#                    trControl = trainControl(method = "cv"),
-#                    tuneGrid = expand.grid(k = 1:10))
-#
-# knn_predictions_v3 <- predict(knn_model_v3, newdata = test_data)
 
 
-predictions <- data.frame(pred_knn = knn_predictions, pred_lm = lm_predictions)
+predictions <- data.frame(pred_knn = knn_predictions, pred_lm = poly_predictions)
 
 write.csv(predictions, file = "predictions.csv", row.names = FALSE)
-
-# print(knn_model_v3$results)
-# print(lm_model_v3$results)
 
 
