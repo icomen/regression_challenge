@@ -17,6 +17,11 @@ set.seed(123)
 
 train_data <- read.csv("train_ch.csv")
 test_data <- read.csv("test_ch.csv")
+test_data_new <- read.csv("test_completo_ch.csv")
+
+# Extract the target variable (Y) from the datasets
+y_train <- train_data$Y
+y_test <- test_data_new$Y
 
 # summary(train_data)   # Get summary statistics for each variable
 # str(train_data)       # View the structure of the data frame
@@ -33,7 +38,7 @@ subset_train <- train_data[, c("v1", "v2", "v3", "v4", "v6", "v8", "v9", "Y")]
 ## Step 2: Plot Predictors and Check Collinearity
 
 # Scatter plots of variables against the response variable using ggplot2
-for (var in vars_no_coll) {
+for (var in vars_of_interest) {
   plot_title <- paste(var, "vs. Y")
   p <- ggplot(train_data, aes(x = get(var), y = Y)) +
     geom_point() +
@@ -42,10 +47,10 @@ for (var in vars_no_coll) {
 }
 
 # Create a pair plot using the 'pairs()' function
-pairs(train_data[, vars_no_coll])
+pairs(train_data[, vars])
 
 # Correlation matrix
-cor_matrix <- cor(train_data[, vars_no_coll])
+cor_matrix <- cor(train_data[, vars_of_interest])
 # print(cor_matrix)
 
 # Plot the correlation matrix using corrplot
@@ -59,7 +64,7 @@ heatmap(cor_matrix,
         ylab = "Variables")
 
 # Loop through each variable and create distribution plots
-for (var in vars_no_coll) {
+for (var in vars_of_interest) {
   # Create a histogram using the 'hist()' function
   hist(train_data[[var]], main = paste("Histogram of", var), xlab = var)
 
@@ -70,7 +75,7 @@ for (var in vars_no_coll) {
 }
 
 # Perform Principal Component Analysis (PCA)
-pca_result <- PCA(train_data[, vars_no_coll], graph = FALSE)
+pca_result <- PCA(train_data[, vars_of_interest], graph = FALSE)
 
 # Create a correlation circle plot
 corr_circle <- fviz_pca_var(pca_result, axes = c(1, 2), col.var = "black")
@@ -80,7 +85,7 @@ print(corr_circle)
 
 ## Step 3: Parametric Linear Regression Model
 
-lm_model <- lm(Y ~ v1 + v2 + v3 + v4 + v6 + v8 + v9, data = subset_train)
+lm_model <- lm(Y ~ v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9, data = train_data)
 
 # Create an empty list to store the regression models
 regression_models <- list()
@@ -107,7 +112,7 @@ lm_model_v8 <- regression_models[["v8"]]
 lm_model_v9 <- regression_models[["v9"]]
 
 # View the summary of the linear regression model
-summary(lm_model)
+# summary(lm_model)
 # summary(lm_model_v1)
 # summary(lm_model_v2)
 # summary(lm_model_v3)
@@ -120,14 +125,14 @@ summary(lm_model)
 
 # Calculate the Variance Inflation Factor (VIF)
 vif_values <- vif(lm_model)
-print(vif_values)
+# print(vif_values)
 
 
 ## Step 4: Check for Nonlinearity in Predictors
 
 # We can assess nonlinearity using the scatterplot of the predictor against the response variable and histogram plots
 
-for (var in vars_no_coll) {
+for (var in vars_of_interest) {
    # Plot the relationship between the predictor and the response variable
   visreg(lm_model, var, scale = "response", line = list(col = "blue"), partial = FALSE,
          xlab = var, ylab = "Response")
@@ -160,7 +165,7 @@ plot(cooksd, pch = "*", cex = 1.5, main = "Influential Observations by Cook's di
 
 # Identify influential observations
 influential <- as.numeric(names(cooksd)[cooksd > 4 / length(cooksd)])
-print(influential)
+# print(influential)
 
 # Solve violations of assumptions:
 
@@ -209,12 +214,22 @@ model_lm <- train(Y ~ v1 + v2 + v3 + v4 + v6 + v8 + v9,
 model_lm$results
 
 
+
 poly_model <- train(Y ~ I(v1^4) + I(v2^4) + I(v3^2)+ v4 + v6 + v8 + I(v9^4),
                     data = subset_train,
                     method = "lm",
                     trControl = trainControl(method = "cv"))
 
 poly_model$results
+
+
+poly_model2 <- train(Y ~ I(v1^2) + I(v2^2) + I(v3^2)+ I(v4^2) + I(v6^2) + I(v8^2) + I(v9^2),
+                    data = subset_train,
+                    method = "lm",
+                    trControl = trainControl(method = "cv"))
+
+poly_model2$results
+
 
 knn_model0 <- train(Y ~ v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9,
                    data = train_data,
@@ -244,11 +259,19 @@ knn_model <- train(Y ~ I(v1^4) + I(v2^4) + I(v3^2) + v4 + v6 + v8 + I(v9^4),
 knn_model$results
 
 
-
-
 lm_predictions <- predict(model_lm, newdata = test_data)
 poly_predictions <- predict(poly_model, newdata = test_data)
 knn_predictions <- predict(knn_model, newdata = test_data)
+
+
+mse <- mean((poly_predictions - y_test)^2)
+print(mse)
+
+
+
+mse_knn <- mean((knn_predictions - y_test)^2)
+print(mse_knn)
+
 
 
 
